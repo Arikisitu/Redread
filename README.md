@@ -1,7 +1,7 @@
 # 🌹 RedRead
 
 <p align="center">
-  <img src="app/src/main/res/drawable-nodpi/redread_launcher.png" width="110" alt="RedRead Logo">
+  <img src="app/src/main/res/drawable/redread_launcher.png" width="110" alt="RedRead Logo">
 </p>
 
 <h3 align="center">Read. Discover. Repeat.</h3>
