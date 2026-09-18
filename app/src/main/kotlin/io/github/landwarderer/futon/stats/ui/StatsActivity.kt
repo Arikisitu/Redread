@@ -215,7 +215,7 @@ class StatsActivity : BaseActivity<ActivityStatsBinding>(),
         val selected = viewModel.period.value
         for ((i, branch) in StatsPeriod.entries.withIndex()) {
             val item = menu.menu.add(R.id.group_period, Menu.NONE, i, branch.titleResId)
-            item.isCheckable = true
+            item.setCheckable(true)
             item.isChecked = selected.ordinal == i
         }
         menu.menu.setGroupCheckable(R.id.group_period, true, true)
@@ -233,10 +233,10 @@ class StatsActivity : BaseActivity<ActivityStatsBinding>(),
         val menu = PopupMenu(this, anchor)
         val byGenre = viewModel.byGenre.value
         val mangaItem = menu.menu.add(R.id.group_period + 1, Menu.NONE, 0, R.string.manga)
-        mangaItem.isCheckable = true
+        mangaItem.setCheckable(true)
         mangaItem.isChecked = !byGenre
         val genreItem = menu.menu.add(R.id.group_period + 1, Menu.NONE, 1, R.string.genres)
-        genreItem.isCheckable = true
+        genreItem.setCheckable(true)
         genreItem.isChecked = byGenre
 
         menu.menu.setGroupCheckable(R.id.group_period + 1, true, true)

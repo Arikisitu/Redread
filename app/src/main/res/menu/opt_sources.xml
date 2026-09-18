@@ -4,6 +4,13 @@
 	xmlns:app="http://schemas.android.com/apk/res-auto">
 
 	<item
+		android:id="@+id/action_source_access"
+		android:icon="@drawable/ic_lock_open"
+		android:title="@string/source_access_lock"
+		android:contentDescription="@string/source_access_lock_desc"
+		app:showAsAction="ifRoom" />
+
+	<item
 		android:id="@+id/action_catalog"
 		android:icon="@drawable/ic_add"
 		android:title="@string/sources_catalog"

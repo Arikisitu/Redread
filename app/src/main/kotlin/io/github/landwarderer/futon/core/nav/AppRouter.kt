@@ -91,6 +91,8 @@ import io.github.landwarderer.futon.settings.reader.ReaderTapGridConfigActivity
 import io.github.landwarderer.futon.settings.sources.TagsBlacklistActivity
 import io.github.landwarderer.futon.settings.sources.auth.SourceAuthActivity
 import io.github.landwarderer.futon.settings.sources.catalog.SourcesCatalogActivity
+import io.github.landwarderer.futon.settings.sources.access.EXTRA_RETURN_TO_CATALOG
+import io.github.landwarderer.futon.settings.sources.access.SourceAccessActivity
 import io.github.landwarderer.futon.settings.sources.extension.ExtensionDownloaderActivity
 import io.github.landwarderer.futon.settings.storage.MangaDirectorySelectDialog
 import io.github.landwarderer.futon.settings.storage.directories.MangaDirectoriesActivity
@@ -205,7 +207,16 @@ class AppRouter private constructor(
         startActivity(suggestionsIntent(contextOrNull() ?: return))
     }
 
-    fun openSourcesCatalog() = startActivity(SourcesCatalogActivity::class.java)
+    fun openSourcesCatalog() {
+        if (settings.isSourceAccessUnlocked) {
+            startActivity(SourcesCatalogActivity::class.java)
+        } else {
+            startActivity(
+                Intent(contextOrNull() ?: return, SourceAccessActivity::class.java)
+                    .putExtra(EXTRA_RETURN_TO_CATALOG, true),
+            )
+        }
+    }
 
     fun openExtensionDownloader() = startActivity(ExtensionDownloaderActivity::class.java)
 

@@ -8,39 +8,40 @@ import javax.inject.Inject
 
 @HiltViewModel
 class SourceAccessViewModel @Inject constructor(
-	private val sourceAccessManager: SourceAccessManager,
+    private val sourceAccessManager: SourceAccessManager,
 ) : BaseViewModel() {
 
-	private var firstPassword: String? = null
+    val onGranted = MutableEventFlow<Unit>()
+    val onPasswordMismatch = MutableEventFlow<Unit>()
 
-	val onGranted = MutableEventFlow<Unit>()
-	val onPasswordMismatch = MutableEventFlow<Unit>()
-	val onClearText = MutableEventFlow<Unit>()
+    /**
+     * Source Access uses a fixed developer-defined password.
+     * There is no user password setup or confirmation.
+     */
+    val needsPasswordSetup: Boolean
+        get() = false
 
-	val needsPasswordSetup: Boolean
-		get() = sourceAccessManager.needsPasswordSetup
+    /**
+     * Whether Source Access is already unlocked.
+     */
+    val isUnlocked: Boolean
+        get() = sourceAccessManager.isUnlocked
 
-	val isConfirming: Boolean
-		get() = firstPassword != null
-
-	fun submit(password: String) {
-		if (needsPasswordSetup) {
-			if (firstPassword == null) {
-				firstPassword = password
-				onClearText.call(Unit)
-			} else if (firstPassword == password) {
-				sourceAccessManager.setPassword(password.toCharArray())
-				firstPassword = null
-				onGranted.call(Unit)
-			} else {
-				firstPassword = null
-				onPasswordMismatch.call(Unit)
-				onClearText.call(Unit)
-			}
-		} else if (sourceAccessManager.unlock(password.toCharArray())) {
-			onGranted.call(Unit)
-		} else {
-			onPasswordMismatch.call(Unit)
-		}
-	}
+    /**
+     * Check the entered password.
+     *
+     * Correct password:
+     * - unlocks Source Access
+     * - persists the unlocked state
+     *
+     * Wrong password:
+     * - keeps Source Access locked
+     */
+    fun submit(password: String) {
+        if (sourceAccessManager.unlock(password.toCharArray())) {
+            onGranted.call(Unit)
+        } else {
+            onPasswordMismatch.call(Unit)
+        }
+    }
 }

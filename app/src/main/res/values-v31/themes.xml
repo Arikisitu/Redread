@@ -2,9 +2,9 @@
 <resources>
 
 	<style name="Base.V31.Futon" parent="Base.V27.Futon">
-		<item name="android:windowSplashScreenAnimatedIcon">@drawable/avd_splash</item>
+		<item name="android:windowSplashScreenAnimatedIcon">@drawable/redread_splash</item>
 		<item name="android:windowSplashScreenAnimationDuration">@integer/splash_screen_duration</item>
-		<item name="android:windowSplashScreenBackground">@color/m3_sys_color_dynamic_light_surface</item>
+		<item name="android:windowSplashScreenBackground">@color/redread_background</item>
 	</style>
 
 	<style name="Theme.Futon" parent="Base.V31.Futon" />

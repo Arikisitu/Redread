@@ -17,6 +17,9 @@ import androidx.preference.Preference
 import androidx.preference.PreferenceFragmentCompat
 import com.google.android.material.appbar.AppBarLayout
 import dagger.hilt.android.AndroidEntryPoint
+import io.github.landwarderer.futon.settings.sources.access.EXTRA_RETURN_TO_SETTINGS_ACTION
+import io.github.landwarderer.futon.settings.sources.access.EXTRA_RETURN_TO_SETTINGS_SOURCE
+import io.github.landwarderer.futon.settings.sources.access.SourceAccessActivity
 import io.github.landwarderer.futon.settings.sources.access.SourceAccessManager
 import io.github.landwarderer.futon.R
 import io.github.landwarderer.futon.backups.ui.periodical.PeriodicalBackupSettingsFragment
@@ -64,6 +67,20 @@ class SettingsActivity :
 	override fun onCreate(savedInstanceState: Bundle?) {
 		super.onCreate(savedInstanceState)
 		setContentView(ActivitySettingsBinding.inflate(layoutInflater))
+
+		if (!sourceAccessManager.isUnlocked && isProtectedSourceAction(intent?.action)) {
+			startActivity(
+				Intent(this, SourceAccessActivity::class.java).apply {
+					putExtra(EXTRA_RETURN_TO_SETTINGS_ACTION, intent?.action)
+					intent?.getStringExtra(AppRouter.KEY_SOURCE)?.let {
+						putExtra(EXTRA_RETURN_TO_SETTINGS_SOURCE, it)
+					}
+				},
+			)
+			finish()
+			return
+		}
+
 		setDisplayHomeAsUp(isEnabled = true, showUpAsClose = false)
 		val fm = supportFragmentManager
 		val currentFragment = fm.findFragmentById(R.id.container)
@@ -76,6 +93,14 @@ class SettingsActivity :
 				replace(R.id.container_master, RootSettingsFragment())
 			}
 		}
+		// Keep ARIK footer visible only on the root/main settings fragment
+		supportFragmentManager.addOnBackStackChangedListener {
+			updateArikFooterVisibility()
+		}
+		// Ensure initial visibility is correct
+		supportFragmentManager.executePendingTransactions()
+		updateArikFooterVisibility()
+
 		viewModel.isSearchActive.observe(this, ::toggleSearchMode)
 		viewModel.onNavigateToPreference.observeEvent(this, ::navigateToPreference)
 	}
@@ -180,11 +205,24 @@ class SettingsActivity :
 		}
 	}
 
+	private fun isProtectedSourceAction(action: String?): Boolean {
+		return action == AppRouter.ACTION_SOURCES ||
+			action == AppRouter.ACTION_SOURCE ||
+			action == AppRouter.ACTION_MANAGE_SOURCES
+	}
+
 	private fun navigateToPreference(item: SettingsItem) {
 		val args = buildBundle(1) {
 			putString(ARG_PREF_KEY, item.key)
 		}
 		openFragment(item.fragmentClass, args, true)
+	}
+
+	private fun updateArikFooterVisibility() {
+		val current = supportFragmentManager.findFragmentById(R.id.container)
+		// Show ARIK only when the root settings fragment is visible in the main container (single-pane)
+		val show = current is RootSettingsFragment && !isMasterDetails
+		viewBinding.textViewArik?.isVisible = show
 	}
 
 	companion object {

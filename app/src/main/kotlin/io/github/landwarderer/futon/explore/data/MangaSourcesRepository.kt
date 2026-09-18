@@ -1,10 +1,7 @@
 package io.github.landwarderer.futon.explore.data
 
-import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import android.content.IntentFilter
-import androidx.core.content.ContextCompat
 import androidx.room.withTransaction
 import io.github.landwarderer.futon.BuildConfig
 import io.github.landwarderer.futon.core.LocalizedAppContext
@@ -12,6 +9,7 @@ import io.github.landwarderer.futon.core.db.MangaDatabase
 import io.github.landwarderer.futon.core.db.dao.MangaSourcesDao
 import io.github.landwarderer.futon.core.db.entity.MangaSourceEntity
 import io.github.landwarderer.futon.core.model.AnonymousMangaSource
+import io.github.landwarderer.futon.core.model.MangaSource
 import io.github.landwarderer.futon.core.model.MangaSourceInfo
 import io.github.landwarderer.futon.core.model.getTitle
 import io.github.landwarderer.futon.core.model.updateMihonTitle
@@ -24,15 +22,12 @@ import io.github.landwarderer.futon.core.ui.util.ReversibleHandle
 import io.github.landwarderer.futon.core.util.ext.flattenLatest
 import io.github.landwarderer.futon.mihon.MihonExtensionManager
 import io.github.landwarderer.futon.mihon.model.MihonMangaSource
+import io.github.landwarderer.futon.mihon.parsers.model.ContentSource
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.channels.awaitClose
-import kotlinx.coroutines.channels.trySendBlocking
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.launchIn
@@ -41,7 +36,7 @@ import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.onStart
 import org.koitharu.kotatsu.parsers.model.ContentType
 import org.koitharu.kotatsu.parsers.model.MangaParserSource
-import org.koitharu.kotatsu.parsers.model.MangaSource
+import org.koitharu.kotatsu.parsers.model.MangaSource as ParserMangaSource
 import org.koitharu.kotatsu.parsers.network.CloudFlareHelper
 import org.koitharu.kotatsu.parsers.util.mapNotNullToSet
 import org.koitharu.kotatsu.parsers.util.mapToSet
@@ -79,21 +74,14 @@ class MangaSourcesRepository @Inject constructor(
         }
 	)
 
-	suspend fun getEnabledSources(): List<MangaSource> {
+	suspend fun getEnabledSources(): List<ParserMangaSource> {
 		assimilateNewSources()
 		val order = settings.sourcesSortOrder
 		return dao.findAll(!settings.isAllSourcesEnabled, order).toSources(settings.isNsfwContentDisabled, order)
-			.let { enabled ->
-				val enabledNames = enabled.mapToSet { it.name }
-				val external = getExternalSources().filterNot { it.name in enabledNames }
-				val list = ArrayList<MangaSourceInfo>(enabled.size + external.size)
-				external.mapTo(list) { MangaSourceInfo(it, isEnabled = true, isPinned = true) }
-				list.addAll(enabled)
-				list
-			}
+			.map { it.mangaSource }
 	}
 
-	suspend fun getPinnedSources(): Set<MangaSource> {
+	suspend fun getPinnedSources(): Set<ParserMangaSource> {
 		assimilateNewSources()
 		val skipNsfw = settings.isNsfwContentDisabled
 		return dao.findAllPinned().mapNotNullToSet {
@@ -101,12 +89,12 @@ class MangaSourcesRepository @Inject constructor(
 		}
 	}
 
-	suspend fun getTopSources(limit: Int): List<MangaSource> {
+	suspend fun getTopSources(limit: Int): List<ParserMangaSource> {
 		assimilateNewSources()
-		return dao.findLastUsed(limit).toSources(settings.isNsfwContentDisabled, null)
+		return dao.findLastUsed(limit).toSources(settings.isNsfwContentDisabled, null).map { it.mangaSource }
 	}
 
-	suspend fun getDisabledSources(): Set<MangaSource> {
+	suspend fun getDisabledSources(): Set<ParserMangaSource> {
 		assimilateNewSources()
 		if (settings.isAllSourcesEnabled) {
 			return emptySet()
@@ -115,7 +103,9 @@ class MangaSourcesRepository @Inject constructor(
 		val enabled = dao.findAllEnabledNames()
 		for (name in enabled) {
 			val source = name.toMangaSourceOrNull() ?: continue
-			result.remove(source)
+			if (source is MangaParserSource) {
+				result.remove(source)
+			}
 		}
 		return result
 	}
@@ -128,7 +118,7 @@ class MangaSourcesRepository @Inject constructor(
 		query: String?,
 		locale: String?,
 		sortOrder: SourcesSortOrder?,
-	): List<MangaSource> {
+	): List<ParserMangaSource> {
 		assimilateNewSources()
 		val entities = dao.findAll().toMutableList()
 		if (isDisabledOnly && !settings.isAllSourcesEnabled) {
@@ -144,19 +134,11 @@ class MangaSourcesRepository @Inject constructor(
 			mapTo(ArrayList(size)) { it.mangaSource }
 		}
 
-		if (isDisabledOnly) {
-			val external = getExternalSources()
-			// For now, we assume external sources are always "enabled" in the sense of being present,
-			// but if they are not in the database, they are "new" to the app.
-			// Actually, let's just add them if they match the query.
-			sources.addAll(external)
-		}
-
 		if (locale != null) {
 			sources.retainAll { 
 				when (it) {
 					is MangaParserSource -> it.locale == locale
-					is io.github.landwarderer.futon.mihon.parsers.model.ContentSource -> it.locale == locale
+					is ContentSource -> it.locale == locale
 					else -> true
 				}
 			}
@@ -168,21 +150,21 @@ class MangaSourcesRepository @Inject constructor(
 			sources.retainAll { 
 				when (it) {
 					is MangaParserSource -> it.contentType in types
-					is io.github.landwarderer.futon.mihon.model.MihonMangaSource -> {
+					is MihonMangaSource -> {
 						val mihonType = it.contentType
 						types.any { kotatsuType ->
 							when (kotatsuType) {
-								org.koitharu.kotatsu.parsers.model.ContentType.MANGA -> mihonType == io.github.landwarderer.futon.mihon.parsers.model.ContentType.MANGA
-								org.koitharu.kotatsu.parsers.model.ContentType.HENTAI -> mihonType == io.github.landwarderer.futon.mihon.parsers.model.ContentType.HENTAI_MANGA
-								org.koitharu.kotatsu.parsers.model.ContentType.COMICS -> mihonType == io.github.landwarderer.futon.mihon.parsers.model.ContentType.COMICS
-								org.koitharu.kotatsu.parsers.model.ContentType.MANHWA -> mihonType == io.github.landwarderer.futon.mihon.parsers.model.ContentType.MANHWA
-								org.koitharu.kotatsu.parsers.model.ContentType.MANHUA -> mihonType == io.github.landwarderer.futon.mihon.parsers.model.ContentType.MANHUA
-								org.koitharu.kotatsu.parsers.model.ContentType.NOVEL -> mihonType == io.github.landwarderer.futon.mihon.parsers.model.ContentType.NOVEL
-								org.koitharu.kotatsu.parsers.model.ContentType.ONE_SHOT -> mihonType == io.github.landwarderer.futon.mihon.parsers.model.ContentType.ONE_SHOT
-								org.koitharu.kotatsu.parsers.model.ContentType.DOUJINSHI -> mihonType == io.github.landwarderer.futon.mihon.parsers.model.ContentType.DOUJINSHI
-								org.koitharu.kotatsu.parsers.model.ContentType.IMAGE_SET -> mihonType == io.github.landwarderer.futon.mihon.parsers.model.ContentType.IMAGE_SET
-								org.koitharu.kotatsu.parsers.model.ContentType.ARTIST_CG -> mihonType == io.github.landwarderer.futon.mihon.parsers.model.ContentType.ARTIST_CG
-								org.koitharu.kotatsu.parsers.model.ContentType.GAME_CG -> mihonType == io.github.landwarderer.futon.mihon.parsers.model.ContentType.GAME_CG
+								ContentType.MANGA -> mihonType == io.github.landwarderer.futon.mihon.parsers.model.ContentType.MANGA
+								ContentType.HENTAI -> mihonType == io.github.landwarderer.futon.mihon.parsers.model.ContentType.HENTAI_MANGA
+								ContentType.COMICS -> mihonType == io.github.landwarderer.futon.mihon.parsers.model.ContentType.COMICS
+								ContentType.MANHWA -> mihonType == io.github.landwarderer.futon.mihon.parsers.model.ContentType.MANHWA
+								ContentType.MANHUA -> mihonType == io.github.landwarderer.futon.mihon.parsers.model.ContentType.MANHUA
+								ContentType.NOVEL -> mihonType == io.github.landwarderer.futon.mihon.parsers.model.ContentType.NOVEL
+								ContentType.ONE_SHOT -> mihonType == io.github.landwarderer.futon.mihon.parsers.model.ContentType.ONE_SHOT
+								ContentType.DOUJINSHI -> mihonType == io.github.landwarderer.futon.mihon.parsers.model.ContentType.DOUJINSHI
+								ContentType.IMAGE_SET -> mihonType == io.github.landwarderer.futon.mihon.parsers.model.ContentType.IMAGE_SET
+								ContentType.ARTIST_CG -> mihonType == io.github.landwarderer.futon.mihon.parsers.model.ContentType.ARTIST_CG
+								ContentType.GAME_CG -> mihonType == io.github.landwarderer.futon.mihon.parsers.model.ContentType.GAME_CG
 								else -> false
 							}
 						}
@@ -199,7 +181,7 @@ class MangaSourcesRepository @Inject constructor(
 		return sources
 	}
 
-	fun observeIsEnabled(source: MangaSource): Flow<Boolean> {
+	fun observeIsEnabled(source: ParserMangaSource): Flow<Boolean> {
 		return dao.observeIsEnabled(source.name).onStart { assimilateNewSources() }
 	}
 
@@ -240,34 +222,26 @@ class MangaSourcesRepository @Inject constructor(
 		}
 	}.flattenLatest()
 		.onStart { assimilateNewSources() }
-		.combine(observeExternalSources()) { enabled, external ->
-			val enabledNames = enabled.mapToSet { it.name }
-			val newExternal = external.filterNot { it.name in enabledNames }
-			val list = ArrayList<MangaSourceInfo>(enabled.size + newExternal.size)
-			newExternal.mapTo(list) { MangaSourceInfo(it, isEnabled = true, isPinned = true) }
-			list.addAll(enabled)
-			list
-		}
 
-	fun observeAll(): Flow<List<Pair<MangaSource, Boolean>>> = dao.observeAll().map { entities ->
-		val result = ArrayList<Pair<MangaSource, Boolean>>(entities.size)
+	fun observeAll(): Flow<List<Pair<ParserMangaSource, Boolean>>> = dao.observeAll().map { entities ->
+		val result = ArrayList<Pair<ParserMangaSource, Boolean>>(entities.size)
 		for (entity in entities) {
 			val source = entity.toMangaSource() ?: continue
-			if (source in allMangaSources || source is AnonymousMangaSource || source is MihonMangaSource) {
+			if (source in allMangaSources || source is AnonymousMangaSource || source is MihonMangaSource || source is ExternalMangaSource) {
 				result.add(source to entity.isEnabled)
 			}
 		}
 		result
 	}.onStart { assimilateNewSources() }
 
-	suspend fun setSourcesEnabled(sources: Collection<MangaSource>, isEnabled: Boolean): ReversibleHandle {
+	suspend fun setSourcesEnabled(sources: Collection<ParserMangaSource>, isEnabled: Boolean): ReversibleHandle {
 		setSourcesEnabledImpl(sources, isEnabled)
 		return ReversibleHandle {
 			setSourcesEnabledImpl(sources, !isEnabled)
 		}
 	}
 
-	suspend fun setSourcesEnabledExclusive(sources: Set<MangaSource>) {
+	suspend fun setSourcesEnabledExclusive(sources: Set<ParserMangaSource>) {
 		db.withTransaction {
 			assimilateNewSources()
 			for (s in allMangaSources) {
@@ -283,7 +257,7 @@ class MangaSourcesRepository @Inject constructor(
 		}
 	}
 
-	suspend fun setPositions(sources: List<MangaSource>) {
+	suspend fun setPositions(sources: List<ParserMangaSource>) {
 		db.withTransaction {
 			for ((index, item) in sources.withIndex()) {
 				dao.setSortKey(item.name, index)
@@ -331,11 +305,11 @@ class MangaSourcesRepository @Inject constructor(
 		val entities = new.map { x ->
 			MangaSourceEntity(
 				source = x.name,
-				isEnabled = if (x is MihonMangaSource) true else isAllEnabled,
+				isEnabled = isAllEnabled,
 				sortKey = ++maxSortKey,
 				addedIn = BuildConfig.VERSION_CODE,
 				lastUsedAt = 0,
-				isPinned = x is MihonMangaSource,
+				isPinned = false,
 				cfState = CloudFlareHelper.PROTECTION_NOT_DETECTED,
 				title = x.getTitle(context),
 			)
@@ -356,20 +330,20 @@ class MangaSourcesRepository @Inject constructor(
 		return settings.sourcesVersion == 0 && dao.findAllEnabledNames().isEmpty()
 	}
 
-	suspend fun setIsPinned(sources: Collection<MangaSource>, isPinned: Boolean): ReversibleHandle {
+	suspend fun setIsPinned(sources: Collection<ParserMangaSource>, isPinned: Boolean): ReversibleHandle {
 		setSourcesPinnedImpl(sources, isPinned)
 		return ReversibleHandle {
 			setSourcesPinnedImpl(sources, !isPinned)
 		}
 	}
 
-	suspend fun trackUsage(source: MangaSource) {
+	suspend fun trackUsage(source: ParserMangaSource) {
 		if (!settings.isIncognitoModeEnabled(source.isNsfw())) {
 			dao.setLastUsed(source.name, System.currentTimeMillis())
 		}
 	}
 
-	private suspend fun setSourcesEnabledImpl(sources: Collection<MangaSource>, isEnabled: Boolean) {
+	private suspend fun setSourcesEnabledImpl(sources: Collection<ParserMangaSource>, isEnabled: Boolean) {
 		if (sources.size == 1) { // fast path
 			dao.setEnabled(sources.first().name, isEnabled)
 			return
@@ -381,18 +355,19 @@ class MangaSourcesRepository @Inject constructor(
 		}
 	}
 
-	private suspend fun getNewSources(): MutableSet<out MangaSource> {
+	private suspend fun getNewSources(): MutableSet<out ParserMangaSource> {
 		val entities = dao.findAll()
-		val result = HashSet<MangaSource>()
+		val result = HashSet<ParserMangaSource>()
         result.addAll(MangaParserSource.entries)
         result.addAll(mihonExtensionManager.getMihonMangaSources())
+		result.addAll(getExternalSources())
 		for (e in entities) {
 			result.remove(e.toMangaSource() ?: continue)
 		}
 		return result
 	}
 
-	private suspend fun setSourcesPinnedImpl(sources: Collection<MangaSource>, isPinned: Boolean) {
+	private suspend fun setSourcesPinnedImpl(sources: Collection<ParserMangaSource>, isPinned: Boolean) {
 		if (sources.size == 1) { // fast path
 			dao.setPinned(sources.first().name, isPinned)
 			return
@@ -404,42 +379,7 @@ class MangaSourcesRepository @Inject constructor(
 		}
 	}
 
-	private fun observeExternalSources(): Flow<List<MangaSource>> {
-		val packageChanges = callbackFlow {
-			val receiver = object : BroadcastReceiver() {
-				override fun onReceive(context: Context?, intent: Intent?) {
-					trySendBlocking(intent)
-				}
-			}
-			ContextCompat.registerReceiver(
-				context,
-				receiver,
-				IntentFilter().apply {
-					addAction(Intent.ACTION_PACKAGE_ADDED)
-					addAction(Intent.ACTION_PACKAGE_VERIFIED)
-					addAction(Intent.ACTION_PACKAGE_REPLACED)
-					addAction(Intent.ACTION_PACKAGE_REMOVED)
-					addAction(Intent.ACTION_PACKAGE_FULLY_REMOVED)
-					addDataScheme("package")
-				},
-				ContextCompat.RECEIVER_EXPORTED,
-			)
-			awaitClose { context.unregisterReceiver(receiver) }
-		}.onStart {
-			emit(null)
-		}
-		
-		return combine(
-			packageChanges,
-			mihonExtensionManager.installedExtensions,
-			mihonExtensionManager.failedExtensions,
-		) { _, _, _ ->
-			getExternalSources()
-		}.distinctUntilChanged()
-			.conflate()
-	}
-
-	fun getExternalSources(): List<MangaSource> {
+	fun getExternalSources(): List<ParserMangaSource> {
 		return context.packageManager.queryIntentContentProviders(
 			Intent("app.futon.parser.PROVIDE_MANGA"), 0,
 		).map { resolveInfo ->
@@ -450,7 +390,7 @@ class MangaSourcesRepository @Inject constructor(
 		}
 	}
 
-	fun getMihonSources(): List<MangaSource> {
+	fun getMihonSources(): List<ParserMangaSource> {
 		return mihonExtensionManager.getMihonMangaSources()
 	}
 
@@ -468,7 +408,7 @@ class MangaSourcesRepository @Inject constructor(
 			if (source.isBroken) {
 				continue
 			}
-			if (source is MangaParserSource || source is MihonMangaSource) {
+			if (source is MangaParserSource || source is MihonMangaSource || source is ExternalMangaSource) {
 				result.add(
 					MangaSourceInfo(
 						mangaSource = source,
@@ -496,18 +436,24 @@ class MangaSourcesRepository @Inject constructor(
 		isAllSourcesEnabled
 	}
 
-	private fun MangaSourceEntity.toMangaSource(): MangaSource? {
+	private fun MangaSourceEntity.toMangaSource(): ParserMangaSource? {
 		if (source.startsWith("mihon:") || source.startsWith("MIHON_")) {
 			return mihonExtensionManager.getMihonMangaSourceByName(source)
-				?: io.github.landwarderer.futon.core.model.MangaSource(source, title)
+				?: MangaSource(source, title)
+		}
+		if (source.startsWith("content:")) {
+			return MangaSource(source)
 		}
 		return MangaParserSource.entries.find { it.name == source }
 	}
 
-	private fun String.toMangaSourceOrNull(): MangaSource? {
+	private fun String.toMangaSourceOrNull(): ParserMangaSource? {
 		if (startsWith("mihon:") || startsWith("MIHON_")) {
 			return mihonExtensionManager.getMihonMangaSourceByName(this)
-				?: io.github.landwarderer.futon.core.model.MangaSource(this)
+				?: MangaSource(this)
+		}
+		if (startsWith("content:")) {
+			return MangaSource(this)
 		}
 		return MangaParserSource.entries.find { it.name == this }
 	}

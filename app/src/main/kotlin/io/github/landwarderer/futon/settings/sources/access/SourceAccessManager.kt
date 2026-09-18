@@ -1,56 +1,68 @@
 package io.github.landwarderer.futon.settings.sources.access
 
-import android.util.Base64
 import io.github.landwarderer.futon.core.prefs.AppSettings
-import java.security.MessageDigest
-import java.security.SecureRandom
-import javax.crypto.SecretKeyFactory
-import javax.crypto.spec.PBEKeySpec
 import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
 class SourceAccessManager @Inject constructor(
-	private val settings: AppSettings,
+    private val settings: AppSettings,
 ) {
 
-	var isUnlocked = false
-		private set
+    /**
+     * Whether Source Access is currently unlocked.
+     *
+     * This value is stored in AppSettings, so it survives:
+     * - closing the app
+     * - reopening the app
+     * - phone restart
+     */
+    val isUnlocked: Boolean
+        get() = settings.isSourceAccessUnlocked
 
-	val needsPasswordSetup: Boolean
-		get() = settings.sourceAccessPasswordHash.isNullOrEmpty() || settings.sourceAccessPasswordSalt.isNullOrEmpty()
+    /**
+     * Source Access uses a fixed developer-defined password.
+     *
+     * NOTE:
+     * A password embedded in an APK is not a truly secret password.
+     * This is intended as an access gate, not strong security.
+     */
+    private companion object {
+        const val SOURCE_ACCESS_PASSWORD = "Arik"
+    }
 
-	fun setPassword(password: CharArray) {
-		val salt = ByteArray(SALT_BYTES).also(SecureRandom()::nextBytes)
-		settings.sourceAccessPasswordSalt = Base64.encodeToString(salt, Base64.NO_WRAP)
-		settings.sourceAccessPasswordHash = Base64.encodeToString(hash(password, salt), Base64.NO_WRAP)
-		password.fill('\u0000')
-		isUnlocked = true
-	}
+    /**
+     * Source Access does not use user-created password setup.
+     */
+    val needsPasswordSetup: Boolean
+        get() = false
 
-	fun unlock(password: CharArray): Boolean {
-		val encodedSalt = settings.sourceAccessPasswordSalt ?: return false
-		val encodedHash = settings.sourceAccessPasswordHash ?: return false
-		val salt = Base64.decode(encodedSalt, Base64.NO_WRAP)
-		val expected = Base64.decode(encodedHash, Base64.NO_WRAP)
-		val result = MessageDigest.isEqual(hash(password, salt), expected)
-		password.fill('\u0000')
-		isUnlocked = result
-		return result
-	}
+    /**
+     * Checks the entered password.
+     *
+     * If correct, Source Access is unlocked and the state
+     * is persisted in AppSettings.
+     */
+    fun unlock(password: CharArray): Boolean {
+        val enteredPassword = password.concatToString()
+        password.fill('\u0000')
 
-	private fun hash(password: CharArray, salt: ByteArray): ByteArray = PBEKeySpec(password, salt, ITERATIONS, KEY_LENGTH_BITS)
-		.let { spec ->
-			try {
-				SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256").generateSecret(spec).encoded
-			} finally {
-				spec.clearPassword()
-			}
-		}
+        val result = enteredPassword == SOURCE_ACCESS_PASSWORD
 
-	private companion object {
-		const val SALT_BYTES = 16
-		const val ITERATIONS = 210_000
-		const val KEY_LENGTH_BITS = 256
-	}
+        if (result) {
+            settings.isSourceAccessUnlocked = true
+        }
+
+        return result
+    }
+
+    /**
+     * Manually locks Source Access again.
+     *
+     * After this is called, the password will be required
+     * the next time Source Access is opened.
+     */
+    fun lockSources() {
+        settings.isSourceAccessUnlocked = false
+    }
 }

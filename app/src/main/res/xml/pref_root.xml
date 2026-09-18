@@ -8,12 +8,6 @@
         android:key="appearance"
         android:title="@string/appearance" />
 
-    <Preference
-        android:icon="@drawable/ic_lock"
-        android:key="source_access"
-        android:summary="@string/source_access_summary"
-        android:title="@string/source_access" />
-
     <PreferenceScreen
         android:fragment="io.github.landwarderer.futon.settings.ReaderSettingsFragment"
         android:icon="@drawable/ic_book_page"

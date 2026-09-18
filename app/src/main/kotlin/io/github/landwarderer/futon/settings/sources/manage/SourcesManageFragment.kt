@@ -1,5 +1,6 @@
 package io.github.landwarderer.futon.settings.sources.manage
 
+import android.content.Intent
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.Menu
@@ -37,6 +38,8 @@ import io.github.landwarderer.futon.databinding.FragmentSettingsSourcesBinding
 import io.github.landwarderer.futon.main.ui.owners.AppBarOwner
 import io.github.landwarderer.futon.settings.SettingsActivity
 import io.github.landwarderer.futon.settings.sources.SourceSettingsFragment
+import io.github.landwarderer.futon.settings.sources.access.SourceAccessActivity
+import io.github.landwarderer.futon.settings.sources.access.SourceAccessManager
 import io.github.landwarderer.futon.settings.sources.adapter.SourceConfigAdapter
 import io.github.landwarderer.futon.settings.sources.adapter.SourceConfigListener
 import io.github.landwarderer.futon.settings.sources.model.SourceConfigItem
@@ -50,6 +53,9 @@ class SourcesManageFragment :
 
 	@Inject
 	lateinit var settings: AppSettings
+
+	@Inject
+	lateinit var sourceAccessManager: SourceAccessManager
 
 	@Inject
 	lateinit var shortcutManager: AppShortcutManager
@@ -103,6 +109,7 @@ class SourcesManageFragment :
 	override fun onResume() {
 		super.onResume()
 		activity?.setTitle(R.string.manage_sources)
+		activity?.invalidateOptionsMenu()
 	}
 
 	override fun onDestroyView() {
@@ -148,6 +155,7 @@ class SourcesManageFragment :
 
 		override fun onCreateMenu(menu: Menu, menuInflater: MenuInflater) {
 			menuInflater.inflate(R.menu.opt_sources, menu)
+			updateSourceAccessMenuState(menu)
 			val searchMenuItem = menu.findItem(R.id.action_search)
 			searchMenuItem.setOnActionExpandListener(this)
 			val searchView = searchMenuItem.actionView as SearchView
@@ -157,6 +165,22 @@ class SourcesManageFragment :
 		}
 
 		override fun onMenuItemSelected(menuItem: MenuItem): Boolean = when (menuItem.itemId) {
+			R.id.action_source_access -> {
+				if (sourceAccessManager.isUnlocked) {
+					sourceAccessManager.lockSources()
+					requireActivity().invalidateOptionsMenu()
+					// Immediately leave the protected source-management screen.
+					requireActivity().onBackPressedDispatcher.onBackPressed()
+				} else {
+					startActivity(
+						Intent(
+							requireContext(),
+							SourceAccessActivity::class.java,
+						),
+					)
+				}
+				true
+			}
 			R.id.action_catalog -> {
 				router.openSourcesCatalog()
 				true
@@ -177,9 +201,23 @@ class SourcesManageFragment :
 
 		override fun onPrepareMenu(menu: Menu) {
 			super.onPrepareMenu(menu)
+			updateSourceAccessMenuState(menu)
 			menu.findItem(R.id.action_no_nsfw).isChecked = settings.isNsfwContentDisabled
 			menu.findItem(R.id.action_disable_all).isVisible = !settings.isAllSourcesEnabled
 			menu.findItem(R.id.action_catalog).isVisible = !settings.isAllSourcesEnabled
+		}
+
+		private fun updateSourceAccessMenuState(menu: Menu) {
+			val item = menu.findItem(R.id.action_source_access) ?: return
+			if (sourceAccessManager.isUnlocked) {
+				item.setIcon(R.drawable.ic_lock)
+				item.title = getString(R.string.source_access_lock)
+				item.contentDescription = getString(R.string.source_access_lock_desc)
+			} else {
+				item.setIcon(R.drawable.ic_lock_open)
+				item.title = getString(R.string.source_access_unlock)
+				item.contentDescription = getString(R.string.source_access_unlock_desc)
+			}
 		}
 
 		override fun onMenuItemActionExpand(item: MenuItem): Boolean {

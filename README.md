@@ -40,7 +40,7 @@
 1. **Clone the repository:**
    ```bash
    git clone https://github.com/AppFuton/Futon.git
-   cd Futon
+   cd RedRead
    ```
 
 2. **Build debug APK:**
@@ -182,3 +182,8 @@ This project stands on the shoulders of giants. The Kotatsu team's dedication to
 For the original Kotatsu project, please visit: [github.com/KotatsuApp/Kotatsu](https://github.com/KotatsuApp/Kotatsu)
 
 </div>
+
+
+## RedRead customization note
+
+RedRead is a branded/customized fork of Futon. Required open-source license and attribution notices are retained. See `REDREAD_CUSTOMIZATION.md` for the main branding resources to replace later.

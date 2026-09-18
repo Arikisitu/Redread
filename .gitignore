@@ -1,9 +1,24 @@
+# Android Studio / IntelliJ
 *.iml
-.gradle
+.idea/
+.vscode/
+
+# Gradle
+.gradle/
+build/
+app/build/
+.externalNativeBuild/
+.cxx/
+.kotlin/
+
+# Local Android configuration
 /local.properties
-/.idea/caches
-/.idea/libraries
-/.idea/dictionaries
+
+# IDE-specific files
+/captures/
+/.idea/caches/
+/.idea/libraries/
+/.idea/dictionaries/
 /.idea/modules.xml
 /.idea/misc.xml
 /.idea/markdown.xml
@@ -20,24 +35,32 @@
 /.idea/deploymentTargetSelector.xml
 /.idea/render.experimental.xml
 /.idea/inspectionProfiles/
-.DS_Store
-/build
-/captures
-.externalNativeBuild
-.cxx
 /.idea/deviceManager.xml
-/.kotlin/
 /.idea/AndroidProjectSystem.xml
-/.vscode/
+
+# Sisyphus / local tooling
 /.sisyphus/
-# Sentry Config File
-sentry.properties
 /opencode.json
-# JVM crash and replay logs
-hs_err_pid*.log
-replay_pid*.log
-# Keystore files — never commit signing keys
+
+# OS files
+.DS_Store
+
+# Sentry
+sentry.properties
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# Signing keys — NEVER commit these
 *.jks
 *.keystore
-.idea/
-gradle.properties
+*.p12
+keystore.properties
+signing.properties
+secrets.properties
+
+# JVM crash / replay logs
+hs_err_pid*.log
+replay_pid*.log

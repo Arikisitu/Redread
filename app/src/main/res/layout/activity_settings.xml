@@ -33,4 +33,18 @@
 		android:visibility="gone"
 		app:layout_behavior="com.google.android.material.appbar.AppBarLayout$ScrollingViewBehavior" />
 
+	<!-- ARIK footer: centered, subtle developer credit -->
+	<TextView
+		android:id="@+id/textViewArik"
+		android:layout_width="wrap_content"
+		android:layout_height="wrap_content"
+		android:layout_gravity="bottom|center_horizontal"
+		android:layout_marginBottom="24dp"
+		android:text="ARIK"
+		android:textColor="@color/futon_onSurfaceVariant"
+		android:textSize="12sp"
+		android:alpha="0.87"
+		android:clickable="false"
+		android:focusable="false" />
+
 </androidx.coordinatorlayout.widget.CoordinatorLayout>

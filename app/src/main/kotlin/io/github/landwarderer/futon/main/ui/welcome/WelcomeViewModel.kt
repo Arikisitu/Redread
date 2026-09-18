@@ -1,7 +1,6 @@
 package io.github.landwarderer.futon.main.ui.welcome
 
 import android.content.Context
-import androidx.core.os.ConfigurationCompat
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -25,7 +24,6 @@ import javax.inject.Inject
 @HiltViewModel
 class WelcomeViewModel @Inject constructor(
 	private val repository: MangaSourcesRepository,
-	@LocalizedAppContext context: Context,
 ) : BaseViewModel() {
 
 	private val allSources = repository.allMangaSources
@@ -35,17 +33,17 @@ class WelcomeViewModel @Inject constructor(
 
 	val locales = MutableStateFlow(
 		FilterProperty<Locale>(
-			availableItems = listOf(Locale.ROOT),
-			selectedItems = setOf(Locale.ROOT),
+			availableItems = emptyList(),
+			selectedItems = emptySet(),
 			isLoading = true,
 			error = null,
 		),
 	)
 
 	val types = MutableStateFlow(
-		FilterProperty(
-			availableItems = listOf(ContentType.MANGA),
-			selectedItems = setOf(ContentType.MANGA),
+		FilterProperty<ContentType>(
+			availableItems = emptyList(),
+			selectedItems = emptySet(),
 			isLoading = true,
 			error = null,
 		),
@@ -58,19 +56,11 @@ class WelcomeViewModel @Inject constructor(
 				availableItems = contentTypes,
 				isLoading = false,
 			)
-			val languages = localesGroups.keys.associateBy { x -> x.language }
-			val selectedLocales = HashSet<Locale>(2)
-			ConfigurationCompat.getLocales(context.resources.configuration).toList()
-				.firstNotNullOfOrNull { lc -> languages[lc.language] }
-				?.let { selectedLocales += it }
-			selectedLocales += Locale.ROOT
 			locales.value = locales.value.copy(
 				availableItems = localesGroups.keys.sortedWithSafe(LocaleComparator()),
-				selectedItems = selectedLocales,
 				isLoading = false,
 			)
 			repository.clearNewSourcesBadge()
-			commit()
 		}
 	}
 

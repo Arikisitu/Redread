@@ -29,11 +29,7 @@ enum class ColorScheme(
 	companion object {
 
 		val default: ColorScheme
-			get() = if (DynamicColors.isDynamicColorAvailable()) {
-				MONET
-			} else {
-				DEFAULT
-			}
+			get() = DEFAULT
 
 		fun getAvailableList(): List<ColorScheme> {
 			val list = ColorScheme.entries.toMutableList()
