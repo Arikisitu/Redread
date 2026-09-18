@@ -1,13 +1,57 @@
-## Futon contribution guidelines
+# 🤝 Contributing to RedRead
 
-+ If you want to **fix bugs** or **implement new features** that **already have an [issue card](https://github.com/AppFuton/Futon/issues):** please assign this issue to you and/or comment about it.
-+ If you want to **implement a new feature:** open an issue or discussion regarding it to ensure it will be accepted.
-+ **Community chat**: Join our Discord for support and discussion — https://discord.gg/9sqBHXhwzz
-+ In case you want to **add a new manga source,** refer to the [parsers repository](https://github.com/Kotatsu-Redo/kotatsu-parsers-redo).
+Thank you for your interest in contributing to **RedRead**.
 
-**Refactoring** or some **dev-faces improvements** might also be accepted. However, please stick to the following principles:
+RedRead is an open-source Android manga reader built on the foundation of the **Futon** project. Contributions that improve stability, usability, accessibility, performance, documentation, and the overall reading experience are welcome.
 
-+ **Performance matters.** In the case of choosing between source code beauty and performance, performance should be a priority. 
-+ Please, **do not modify readme and other information files** (except for typos)(and if you are better at explaining it then thats also accepted)
-+ **Avoid adding new dependencies** unless required. APK size is important.
-+ **please explain your changes** atleast try to cause it just helps us work a lot faster than spending time figuring out what you did🥲.
+---
+
+## 📋 Before You Start
+
+Before making a contribution:
+
+- Read the project README.
+- Check existing issues and pull requests.
+- Search for existing discussions about the change you want to make.
+- Avoid duplicating work that is already in progress.
+- For large changes, open an issue or discussion before starting implementation.
+
+---
+
+# 🐛 Reporting Bugs
+
+If you find a bug, please provide enough information to reproduce it.
+
+Include:
+
+- Android version
+- Device or emulator
+- RedRead version
+- Steps to reproduce
+- Expected behavior
+- Actual behavior
+- Relevant screenshots or recordings
+- Relevant logs or error messages
+
+### Example
+
+```text
+### Bug
+The reader does not remember the selected reading mode.
+
+### Environment
+Android: 15
+RedRead: v1.0.0
+Device: Pixel device
+
+### Steps to reproduce
+1. Open a manga.
+2. Change the reading mode.
+3. Close the reader.
+4. Open the same chapter again.
+
+### Expected behavior
+The selected reading mode should remain active.
+
+### Actual behavior
+The reader returns to the previous mode.
